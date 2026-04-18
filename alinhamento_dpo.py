@@ -55,3 +55,36 @@ def montar_dupla_de_modelos(base):
     candidato = get_peft_model(candidato, esquema_de_adaptacao())
     ancora = AutoModelForCausalLM.from_pretrained(base, quantization_config=quant, device_map="auto")
     return decodificador, candidato, ancora
+
+def parametros_de_otimizacao():
+    return DPOConfig(
+        beta=PENALIDADE_DESVIO,
+        output_dir=DESTINO_MODELO,
+        per_device_train_batch_size=AMOSTRAS_POR_PASSO,
+        gradient_accumulation_steps=ACUMULACAO,
+        num_train_epochs=RODADAS,
+        learning_rate=RITMO_APRENDIZADO,
+        optim="paged_adamw_32bit",
+        fp16=False,
+        bf16=True,
+        logging_steps=5,
+        save_strategy="epoch",
+        max_length=COMPRIMENTO_MAXIMO,
+        remove_unused_columns=False,
+        report_to="none",
+    )
+
+conjunto = abrir_pares_de_preferencia(ARQUIVO_PARES)
+decodificador, candidato, ancora = montar_dupla_de_modelos(BASE_PESOS)
+
+ciclo_dpo = DPOTrainer(
+    model=candidato,
+    ref_model=ancora,
+    args=parametros_de_otimizacao(),
+    train_dataset=conjunto,
+    processing_class=decodificador,
+)
+
+historico = ciclo_dpo.train()
+print(f"loss final: {historico.training_loss:.4f}")
+ciclo_dpo.save_model(DESTINO_MODELO)
